@@ -1,0 +1,7 @@
+services:
+  ipa:
+    volumes:
+      - type: bind
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+        read_only: true

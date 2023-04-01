@@ -1,0 +1,26 @@
+services:
+  ipa:
+    environment:
+      - IPA_SERVER_HOSTNAME
+      - IPA_SERVER_IP
+      - IPA_SERVER_INSTALL_OPTS
+      - PASSWORD
+    healthcheck:
+      test: ["CMD", "/usr/bin/systemctl", "status", "ipa"]
+      timeout: 10s
+      interval: 10s
+    hostname: ${IPA_SERVER_HOSTNAME}
+    image: quay.io/freeipa/freeipa-server:rocky-9
+    read_only: true
+    stop_signal: RTMIN+3
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 0
+    tmpfs:
+      - /run
+      - /tmp
+    volumes:
+      - ipa_data:/data
+      - ipa_journal:/var/log/journal
+volumes:
+  ipa_data:
+  ipa_journal:

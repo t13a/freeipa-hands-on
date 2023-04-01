@@ -1,0 +1,14 @@
+services:
+  ipa:
+    ports:
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_DNS}:53
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_DNS}:53/udp
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_HTTP}:80
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_HTTPS}:443
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_KERBEROS}:88
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_KERBEROS}:88/udp
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_KPASSWD}:464
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_KPASSWD}:464/udp
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_LDAP}:389
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_LDAPS}:636
+      - ${IPA_HOST_IP}:${IPA_HOST_PORT_NTP}:123/udp
