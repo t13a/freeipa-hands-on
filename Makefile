@@ -1,13 +1,8 @@
-.DELETE_ON_ERROR:
-
 MAKEFLAGS += --no-builtin-rules --no-builtin-variables
 
 DOCKER_COMPOSE_FILES := docker-compose.yml
 ifeq ($(wildcard /sys/fs/cgroup/cgroup.controllers),) # cgroups v1
 DOCKER_COMPOSE_FILES += docker-compose.cgroups-v1.yml
-endif
-ifeq ($(EXPOSE),1) # specify `EXPOSE=1`
-DOCKER_COMPOSE_FILES += docker-compose.expose.yml
 endif
 
 ifneq ($(wildcard /sys/fs/cgroup/cgroup.controllers),) # cgroups v2
@@ -20,78 +15,44 @@ endif
 up: up/no-wait wait info
 
 .PHONY: up/no-wait
-up/no-wait: .env
+up/no-wait:
 	docker compose $(addprefix -f ,$(DOCKER_COMPOSE_FILES)) up -d
 
 .PHONY: down
-down: .env
+down:
 	docker compose down -v
 
 .PHONY: start
-start: start/no-wait wait info
+start: start/no-wait wait
 
 .PHONY: start/no-wait
-start/no-wait: .env
+start/no-wait:
 	docker compose start
 
 .PHONY: stop
-stop: .env
+stop:
 	docker compose stop
 
 .PHONY: wait
 wait:
-	./exec-until-healthy.sh docker compose logs -f --no-log-prefix ipa || true
+	hack/wait-for-healthy.sh ipa docker compose logs -f --no-log-prefix ipa || true
+
+.PHONY: info
+info: IPA_SERVER_HOSTNAME = $(shell hack/dotenv.sh .env -- printenv IPA_SERVER_HOSTNAME)
+ifneq ($(shell hack/dotenv.sh .env -- printenv IPA_SERVER_IP),)
+info: IPA_SERVER_IP = $(shell hack/dotenv.sh .env -- printenv IPA_SERVER_IP)
+else
+info: DOCKER_NETWORK_NAME = $(shell hack/dotenv.sh .env -- printenv DOCKER_NETWORK_NAME)
+info: COMPOSE_PROJECT_NAME = $(shell hack/dotenv.sh .env -- printenv COMPOSE_PROJECT_NAME)
+info: IPA_SERVER_IP = $(shell hack/print-container-ip-address.sh $(DOCKER_NETWORK_NAME) $(COMPOSE_PROJECT_NAME)-ipa-1)
+endif
+info:
+	@echo
+	@echo 'Append following line to /etc/hosts, or add a A record to your DNS.'
+	@echo '> $(IPA_SERVER_IP) $(IPA_SERVER_HOSTNAME)'
+	@echo
 
 .PHONY: exec
 exec: CMD := bash
-exec: .env
+exec:
 	@docker compose exec ipa $(CMD)
-
-.PHONY: info
-info: IPA_SERVER_HOSTNAME = $(shell set -a; source ./.env; set +a; printenv IPA_SERVER_HOSTNAME)
-info: PASSWORD = $(shell set -a; source ./.env; set +a; printenv PASSWORD)
-info: .env
-	@$(info )
-	@$(info Web UI: https://$(IPA_SERVER_HOSTNAME)/ipa/ui/)
-	@$(info Username: admin)
-	@$(info Password: $(PASSWORD))
-	@$(info )
-
-.PHONY: clean
-clean:
-	rm -f .env
-
-.env: DOMAIN = example.test
-.env: IPA_HOST_IP = 0.0.0.0
-.env: IPA_HOST_PORT_DNS = 53
-.env: IPA_HOST_PORT_HTTP = 80
-.env: IPA_HOST_PORT_HTTPS = 443
-.env: IPA_HOST_PORT_KERBEROS = 88
-.env: IPA_HOST_PORT_KPASSWD = 464
-.env: IPA_HOST_PORT_LDAP = 389
-.env: IPA_HOST_PORT_LDAPS = 636
-.env: IPA_HOST_PORT_NTP = 123
-.env: IPA_SERVER_HOSTNAME = ipa.$(DOMAIN)
-.env: IPA_SERVER_IP = 
-.env: IPA_SERVER_INSTALL_OPTS = \
-	--unattended \
-	--domain=$(DOMAIN) \
-	--realm=$(shell echo $(DOMAIN) | tr [:lower:] [:upper:]) \
-	--no-ui-redirect \
-	--no-ntp
-.env: PASSWORD = Secret123
-.env:
-	rm -f $@
-	echo 'IPA_HOST_IP=$(IPA_HOST_IP)' >> $@
-	echo 'IPA_HOST_PORT_DNS=$(IPA_HOST_PORT_DNS)' >> $@
-	echo 'IPA_HOST_PORT_HTTP=$(IPA_HOST_PORT_HTTP)' >> $@
-	echo 'IPA_HOST_PORT_HTTPS=$(IPA_HOST_PORT_HTTPS)' >> $@
-	echo 'IPA_HOST_PORT_KERBEROS=$(IPA_HOST_PORT_KERBEROS)' >> $@
-	echo 'IPA_HOST_PORT_KPASSWD=$(IPA_HOST_PORT_KPASSWD)' >> $@
-	echo 'IPA_HOST_PORT_LDAP=$(IPA_HOST_PORT_LDAP)' >> $@
-	echo 'IPA_HOST_PORT_LDAPS=$(IPA_HOST_PORT_LDAPS)' >> $@
-	echo 'IPA_HOST_PORT_NTP=$(IPA_HOST_PORT_NTP)' >> $@
-	echo 'IPA_SERVER_HOSTNAME=$(IPA_SERVER_HOSTNAME)' >> $@
-	echo 'IPA_SERVER_INSTALL_OPTS="$(IPA_SERVER_INSTALL_OPTS)"' >> $@
-	echo 'IPA_SERVER_IP=$(IPA_SERVER_IP)' >> $@
-	echo 'PASSWORD="$(PASSWORD)"' >> $@

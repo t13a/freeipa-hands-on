@@ -1,3 +1,6 @@
+networks:
+  default:
+    name: ${DOCKER_NETWORK_NAME}
 services:
   ipa:
     environment:
@@ -5,12 +8,13 @@ services:
       - IPA_SERVER_IP
       - IPA_SERVER_INSTALL_OPTS
       - PASSWORD
+      - TZ
     healthcheck:
       test: ["CMD", "/usr/bin/systemctl", "status", "ipa"]
       timeout: 10s
       interval: 10s
     hostname: ${IPA_SERVER_HOSTNAME}
-    image: quay.io/freeipa/freeipa-server:rocky-9
+    image: quay.io/freeipa/freeipa-server:${IPA_IMAGE_TAG}
     read_only: true
     stop_signal: RTMIN+3
     sysctls:
