@@ -1,0 +1,43 @@
+networks:
+  default:
+    external: true
+    name: ${DOCKER_NETWORK_NAME}
+services:
+  gitlab:
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://${GITLAB_HOSTNAME}'
+        letsencrypt['enable'] = false
+
+        gitlab_rails['ldap_enabled'] = true
+        gitlab_rails['ldap_servers'] = YAML.load <<-'EOS'
+          main: 
+            label: 'FreeIPA'
+            host: '${GITLAB_HOSTNAME}'
+            port: 389
+            uid: 'uid'
+            method: 'tls'
+            bind_dn: '${GITLAB_LDAP_BIND_DN}'
+            password: '${GITLAB_LDAP_BIND_PW}'
+            encryption: 'plain'
+            base: '${GITLAB_LDAP_BASE_DN}'
+            verify_certificates: false
+            attributes:
+              username: ['uid']
+              email: ['mail']
+              name: 'displayName'
+              first_name: 'givenName'
+              last_name: 'sn'
+        EOS
+      TZ: ${TZ}
+    hostname: ${GITLAB_HOSTNAME}
+    image: gitlab/gitlab-ce:${GITLAB_IMAGE_TAG}
+    shm_size: 256m
+    volumes:
+      - gitlab_conf:/etc/gitlab
+      - gitlab_data:/var/opt/gitlab
+      - gitlab_logs:/var/log/gitlab
+volumes:
+  gitlab_conf:
+  gitlab_data:
+  gitlab_logs:
