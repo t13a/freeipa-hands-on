@@ -1,58 +1,43 @@
 MAKEFLAGS += --no-builtin-rules --no-builtin-variables
 
-DOCKER_COMPOSE_FILES := docker-compose.yml
-ifeq ($(wildcard /sys/fs/cgroup/cgroup.controllers),) # cgroups v1
-DOCKER_COMPOSE_FILES += docker-compose.cgroups-v1.yml
-endif
+.PHONY: init
+init: .env
 
-ifneq ($(wildcard /sys/fs/cgroup/cgroup.controllers),) # cgroups v2
-ifeq ($(shell docker info | grep userns),)
-$(warning User namespace remapping is not used (see: https://github.com/freeipa/freeipa-container).)
+.env: COMPOSE_FILE ?= \
+	docker-compose.base.yml docker-compose.docker-volume.yml
+ifneq ($(wildcard /var/run/docker.sock),) # Pass the socket to Docker-included containers.
+.env: COMPOSE_FILE += docker-compose.docker-socket.yml
 endif
+ifeq ($(shell stat -fc %T /sys/fs/cgroup),tmpfs) # With cgroups v1, add bind mount to SystemD-based containers.
+.env: COMPOSE_FILE += docker-compose.cgroups-v1.yml
 endif
+.env: COMPOSE_PROFILES ?= all
+.env: TZ ?= $(shell timedatectl show -p Timezone --value)
+.env:
+	( \
+		cat base.env \
+		&& echo COMPOSE_FILE=$(COMPOSE_FILE) | tr ' ' ':' \
+		&& echo COMPOSE_PROFILES=$(COMPOSE_PROFILES) \
+		&& echo TZ=$(TZ) \
+	) > $@
+
+.PHONY: clean
+clean:
+	rm -f .env
 
 .PHONY: up
-up: up/no-wait wait info
-
-.PHONY: up/no-wait
-up/no-wait:
-	docker compose $(addprefix -f ,$(DOCKER_COMPOSE_FILES)) up -d
+up:
+	docker compose up -d --wait
 
 .PHONY: down
 down:
 	docker compose down -v
 
-.PHONY: start
-start: start/no-wait wait
-
-.PHONY: start/no-wait
-start/no-wait:
-	docker compose start
-
-.PHONY: stop
-stop:
-	docker compose stop
-
-.PHONY: wait
-wait:
-	hack/wait-for-healthy.sh ipa docker compose logs -f --no-log-prefix ipa || true
-
-.PHONY: info
-info: IPA_SERVER_HOSTNAME = $(shell hack/dotenv.sh .env -- printenv IPA_SERVER_HOSTNAME)
-ifneq ($(shell hack/dotenv.sh .env -- printenv IPA_SERVER_IP),)
-info: IPA_SERVER_IP = $(shell hack/dotenv.sh .env -- printenv IPA_SERVER_IP)
-else
-info: DOCKER_NETWORK_NAME = $(shell hack/dotenv.sh .env -- printenv DOCKER_NETWORK_NAME)
-info: COMPOSE_PROJECT_NAME = $(shell hack/dotenv.sh .env -- printenv COMPOSE_PROJECT_NAME)
-info: IPA_SERVER_IP = $(shell hack/print-container-ip-address.sh $(DOCKER_NETWORK_NAME) $(COMPOSE_PROJECT_NAME)-ipa-1)
-endif
-info:
-	@echo
-	@echo 'Append following line to /etc/hosts, or add a A record to your DNS.'
-	@echo '> $(IPA_SERVER_IP) $(IPA_SERVER_HOSTNAME)'
-	@echo
-
-.PHONY: exec
-exec: CMD := bash
-exec:
-	@docker compose exec ipa $(CMD)
+.PHONY: hosts
+hosts:
+	@for name in $$(docker compose ps | tail -n +2 | cut -d' ' -f1); \
+	do \
+		hostname="$$(docker inspect --format="{{.Config.Hostname}}" $$name)"; \
+		ip="$$(docker inspect --format="{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" $$name)"; \
+		printf '%s %s # %s\n' $$ip $$hostname $$name; \
+	done

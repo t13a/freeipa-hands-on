@@ -1,0 +1,106 @@
+services:
+  gitlab:
+    profiles:
+      - all
+      - gitlab
+    depends_on:
+      gitlab-init-ldap:
+        condition: service_completed_successfully
+      ipa:
+        condition: service_healthy
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://${GITLAB_HOSTNAME}'
+        letsencrypt['enable'] = false
+
+        gitlab_rails['ldap_enabled'] = true
+        gitlab_rails['ldap_servers'] = YAML.load <<-'EOS'
+          main: 
+            label: 'FreeIPA'
+            host: '${IPA_HOSTNAME}'
+            port: 389
+            uid: 'uid'
+            method: 'tls'
+            bind_dn: '${GITLAB_LDAP_BIND_DN}'
+            password: '${GITLAB_LDAP_BIND_PASSWORD}'
+            encryption: 'plain'
+            base: '${GITLAB_LDAP_BASE_DN}'
+            verify_certificates: false
+            attributes:
+              username: ['uid']
+              email: ['mail']
+              name: 'displayName'
+              first_name: 'givenName'
+              last_name: 'sn'
+        EOS
+      TZ: ${TZ}
+    hostname: ${GITLAB_HOSTNAME}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10
+      timeout: 10s
+      interval: 10s
+      start_period: 30m
+    image: gitlab/gitlab-ce:15.9.4-ce.0
+    shm_size: 256m
+  gitlab-init-ldap:
+    profiles:
+      - all
+      - gitlab
+    command:
+      - docker
+      - compose
+      - exec
+      - ipa
+      - sh
+      - -c
+      - |
+        set -eu
+        kinit admin <<< '${IPA_PASSWORD}'
+        ipa user-show ${GITLAB_LDAP_BIND_USERNAME} \
+        || ipa user-add \
+            ${GITLAB_LDAP_BIND_USERNAME} \
+            --first='GitLab' \
+            --last='LDAP Bind' \
+            --shell=/bin/false \
+            --password-expiration=9999-12-24T23:59Z \
+            --password <<< '${GITLAB_LDAP_BIND_PASSWORD}'
+    depends_on:
+      ipa:
+        condition: service_healthy
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+    image: docker:latest
+    volumes:
+      - type: bind
+        source: .
+        target: /mnt
+        read_only: true
+    working_dir: /mnt
+  ipa:
+    profiles:
+      - all
+      - ipa
+    environment:
+      IPA_SERVER_HOSTNAME: ${IPA_HOSTNAME}
+      IPA_SERVER_INSTALL_OPTS: ${IPA_SERVER_INSTALL_OPTS}
+      PASSWORD: ${IPA_PASSWORD}
+      TZ: ${TZ}
+    hostname: ${IPA_HOSTNAME}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /usr/bin/systemctl status ipa
+      timeout: 10s
+      interval: 10s
+      start_period: 30m
+    image: quay.io/freeipa/freeipa-server:centos-9-stream-4.10.1
+    read_only: true
+    stop_signal: RTMIN+3
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 0
+    tmpfs:
+      - /run
+      - /tmp

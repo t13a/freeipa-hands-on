@@ -1,0 +1,16 @@
+services:
+  gitlab:
+    volumes:
+      - gitlab_conf:/etc/gitlab
+      - gitlab_data:/var/opt/gitlab
+      - gitlab_logs:/var/log/gitlab
+  ipa:
+    volumes:
+      - ipa_data:/data
+      - ipa_journal:/var/log/journal
+volumes:
+  gitlab_conf:
+  gitlab_data:
+  gitlab_logs:
+  ipa_data:
+  ipa_journal:
