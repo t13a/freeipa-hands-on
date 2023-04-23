@@ -57,7 +57,7 @@ services:
       - -c
       - |
         set -eu
-        kinit admin <<< '${IPA_PASSWORD}'
+        kinit ${IPA_ADMIN_USERNAME} <<< '${IPA_ADMIN_PASSWORD}'
         ipa user-show ${GITLAB_LDAP_BIND_USERNAME} \
         || ipa user-add \
             ${GITLAB_LDAP_BIND_USERNAME} \
@@ -71,7 +71,7 @@ services:
         condition: service_healthy
     environment:
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
-      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+      DOCKER_HOST: ${DOCKER_HOST}
     image: docker:latest
     volumes:
       - type: bind
@@ -86,7 +86,7 @@ services:
     environment:
       IPA_SERVER_HOSTNAME: ${IPA_HOSTNAME}
       IPA_SERVER_INSTALL_OPTS: ${IPA_SERVER_INSTALL_OPTS}
-      PASSWORD: ${IPA_PASSWORD}
+      PASSWORD: ${IPA_ADMIN_PASSWORD}
       TZ: ${TZ}
     hostname: ${IPA_HOSTNAME}
     healthcheck:

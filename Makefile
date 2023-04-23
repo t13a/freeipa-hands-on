@@ -3,23 +3,8 @@ MAKEFLAGS += --no-builtin-rules --no-builtin-variables
 .PHONY: init
 init: .env
 
-.env: COMPOSE_FILE ?= \
-	docker-compose.base.yml docker-compose.docker-volume.yml
-ifneq ($(wildcard /var/run/docker.sock),) # Pass the socket to Docker-included containers.
-.env: COMPOSE_FILE += docker-compose.docker-socket.yml
-endif
-ifeq ($(shell stat -fc %T /sys/fs/cgroup),tmpfs) # With cgroups v1, add bind mount to SystemD-based containers.
-.env: COMPOSE_FILE += docker-compose.cgroups-v1.yml
-endif
-.env: COMPOSE_PROFILES ?= all
-.env: TZ ?= $(shell timedatectl show -p Timezone --value)
 .env:
-	( \
-		cat base.env \
-		&& echo COMPOSE_FILE=$(COMPOSE_FILE) | tr ' ' ':' \
-		&& echo COMPOSE_PROFILES=$(COMPOSE_PROFILES) \
-		&& echo TZ=$(TZ) \
-	) > $@
+	./.env.sh  > $@
 
 .PHONY: clean
 clean:
